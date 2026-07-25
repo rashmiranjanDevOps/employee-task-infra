@@ -1,0 +1,7 @@
+# Copy to inventory.ini and fill in the real IP (or pass it directly on the
+# command line — see ansible/README.md).
+#
+#   terraform -chdir=../terraform/global output -raw jenkins_public_ip
+
+[jenkins]
+REPLACE_WITH_JENKINS_PUBLIC_IP ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/YOUR_KEY.pem

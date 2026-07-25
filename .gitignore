@@ -1,0 +1,17 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+# Note: .terraform.lock.hcl is intentionally NOT ignored - it should be
+# committed so everyone applies with the same provider versions.
+
+# Ansible - the real inventory has a real IP and a real key path in it
+ansible/inventory.ini
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/

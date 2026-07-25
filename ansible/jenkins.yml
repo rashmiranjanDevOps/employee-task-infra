@@ -1,0 +1,137 @@
+---
+# jenkins.yml — configures the EC2 instance terraform/modules/jenkins-server
+# provisioned. Terraform's job stopped at "a reachable Ubuntu box with the
+# right IAM role and security group exists" — everything about what
+# software actually runs on it is defined here instead, in one
+# human-readable file, rather than split across Terraform user_data and a
+# separate setup script.
+#
+# Usage:
+#   cp inventory.ini.example inventory.ini   # fill in the real IP + key path
+#   ansible-playbook jenkins.yml
+
+- name: Configure Jenkins server
+  hosts: jenkins
+  become: true
+
+  vars:
+    node_version: "20"
+    yq_version: "v4.44.3"
+    trivy_version: "0.54.1"
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install base packages
+      ansible.builtin.apt:
+        name:
+          - openjdk-17-jdk
+          - git
+          - curl
+          - unzip
+          - jq
+          - awscli
+        state: present
+
+    # ─── Docker ─────────────────────────────────────────────────────────────
+    - name: Install Docker
+      ansible.builtin.apt:
+        name: docker.io
+        state: present
+
+    - name: Start and enable Docker
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Add ubuntu user to the docker group
+      ansible.builtin.user:
+        name: ubuntu
+        groups: docker
+        append: true
+
+    # ─── Jenkins ────────────────────────────────────────────────────────────
+    - name: Add Jenkins apt key
+      ansible.builtin.get_url:
+        url: https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+        dest: /usr/share/keyrings/jenkins-keyring.asc
+        mode: "0644"
+
+    - name: Add Jenkins apt repository
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/"
+        filename: jenkins
+        state: present
+
+    - name: Install Jenkins
+      ansible.builtin.apt:
+        name: jenkins
+        state: present
+        update_cache: true
+
+    - name: Add jenkins user to the docker group
+      ansible.builtin.user:
+        name: jenkins
+        groups: docker
+        append: true
+
+    - name: Start and enable Jenkins
+      ansible.builtin.systemd:
+        name: jenkins
+        state: started
+        enabled: true
+
+    # ─── CLI tools the Jenkinsfile's stages call directly ──────────────────
+    - name: Install kubectl
+      ansible.builtin.get_url:
+        url: "https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl"
+        dest: /usr/local/bin/kubectl
+        mode: "0755"
+
+    - name: Install Helm
+      ansible.builtin.shell: |
+        curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      args:
+        creates: /usr/local/bin/helm
+
+    - name: Install yq
+      ansible.builtin.get_url:
+        url: "https://github.com/mikefarah/yq/releases/download/{{ yq_version }}/yq_linux_amd64"
+        dest: /usr/local/bin/yq
+        mode: "0755"
+
+    - name: Install Trivy
+      ansible.builtin.shell: |
+        curl -fsSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+          | sh -s -- -b /usr/local/bin "v{{ trivy_version }}"
+      args:
+        creates: /usr/local/bin/trivy
+
+    - name: Add NodeSource apt repository (Node {{ node_version }})
+      ansible.builtin.shell: |
+        curl -fsSL https://deb.nodesource.com/setup_{{ node_version }}.x | bash -
+      args:
+        creates: "/etc/apt/sources.list.d/nodesource.list"
+
+    - name: Install Node.js
+      ansible.builtin.apt:
+        name: nodejs
+        state: present
+
+    - name: Confirm Jenkins is listening
+      ansible.builtin.wait_for:
+        port: 8080
+        timeout: 60
+
+    - name: Print the Jenkins initial admin password
+      ansible.builtin.command: cat /var/lib/jenkins/secrets/initialAdminPassword
+      register: jenkins_password
+      changed_when: false
+
+    - name: Show it
+      ansible.builtin.debug:
+        msg: "Jenkins initial admin password: {{ jenkins_password.stdout }}"
