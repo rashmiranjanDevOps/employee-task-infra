@@ -100,9 +100,16 @@ helm repo update >/dev/null
 
 kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
 
+# helm upgrade --install argocd argo/argo-cd \
+#   --namespace argocd \
+#   --set crds.install=true \
+#   --wait \
+#   --timeout 10m
+
 helm upgrade --install argocd argo/argo-cd \
   --namespace argocd \
   --set crds.install=true \
+  --set configs.params."server\.insecure"=true \
   --wait \
   --timeout 10m
 
