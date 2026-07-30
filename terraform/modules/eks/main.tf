@@ -40,6 +40,28 @@ resource "aws_cloudwatch_log_group" "cluster" {
   retention_in_days = 7
 }
 
+# ─── Node Launch Template ───────────────────────────────────────────────────
+# Managed node groups don't attach a custom security group by default — only
+# the cluster's shared SG. Without this launch template, aws_security_group.node
+# (the one RDS's ingress rule expects traffic to come from) is created but
+# never actually attached to any instance, silently breaking DB connectivity.
+resource "aws_launch_template" "node" {
+  name_prefix = "${var.cluster_name}-node-"
+
+  vpc_security_group_ids = [aws_security_group.node.id]
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "${var.cluster_name}-node"
+    }
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 # ─── EKS Cluster ────────────────────────────────────────────────────────────────
 resource "aws_eks_cluster" "this" {
   name     = var.cluster_name
@@ -146,6 +168,19 @@ resource "aws_security_group" "node" {
   }
 }
 
+# ─── Cluster ← Node ingress (standalone rule to avoid an SG dependency cycle
+# with the inline ingress rule inside aws_security_group.node above, which
+# references aws_security_group.cluster.id) ─────────────────────────────────
+resource "aws_security_group_rule" "cluster_ingress_from_nodes" {
+  type                     = "ingress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.cluster.id
+  source_security_group_id = aws_security_group.node.id
+  description               = "Allow nodes to reach the EKS API server"
+}
+
 # ─── Managed Node Group (single, on-demand) ─────────────────────────────────────
 resource "aws_eks_node_group" "this" {
   cluster_name    = aws_eks_cluster.this.name
@@ -160,6 +195,11 @@ resource "aws_eks_node_group" "this" {
     min_size     = var.node_min_size
     max_size     = var.node_max_size
     desired_size = var.node_desired_size
+  }
+
+  launch_template {
+    id      = aws_launch_template.node.id
+    version = aws_launch_template.node.latest_version
   }
 
   depends_on = [
