@@ -9,10 +9,16 @@ variable "domain_name" {
   default     = "rashmidevops.xyz"
 }
 
-variable "github_repo" {
-  description = "owner/repo of the app repo, allowed to assume the CI/CD IAM role"
+variable "github_repo_subject" {
+  description = <<-EOT
+    OIDC subject this role trusts, GitHub's immutable-ID format:
+    repo:OWNER@OWNER_ID/REPO@REPO_ID:*
+    Get the IDs with:
+      gh api /orgs/<org> --jq .id          # owner_id
+      gh api /repos/<org>/<repo> --jq .id  # repo_id
+  EOT
   type        = string
-  default     = "rashmiranjandevops/employee-task-app"
+  default     = "rashmiranjanDevOps@257695109/employee-task-app@1311664685"
 }
 
 variable "jenkins_admin_cidr" {
