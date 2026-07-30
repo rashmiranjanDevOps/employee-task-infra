@@ -15,7 +15,7 @@ metadata:
     # talk HTTPS to the pod too, not plain HTTP, avoiding a protocol
     # mismatch that otherwise shows up as the UI loading but API/CLI calls
     # failing.
-    alb.ingress.kubernetes.io/backend-protocol: HTTPS
+    alb.ingress.kubernetes.io/backend-protocol: HTTP
 
 spec:
   ingressClassName: alb
@@ -30,4 +30,4 @@ spec:
               service:
                 name: argocd-server
                 port:
-                  number: 443
+                  number: 80
