@@ -9,7 +9,7 @@ variable "domain_name" {
 }
 
 variable "github_repo_subject" {
-  description = "rashmiranjan7/employee-task-app - scopes the OIDC role to only this repo"
+  description = "rashmiranjanDevOps/employee-task-app - scopes the OIDC role to only this repo"
   type        = string
 }
 
